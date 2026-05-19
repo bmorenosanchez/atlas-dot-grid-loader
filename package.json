@@ -1,0 +1,41 @@
+{
+  "name": "@optimaldynamics/dot-grid-loader",
+  "version": "0.1.0",
+  "description": "Subtle dot-grid background loader for React. An invisible circle orbits the grid, lifting nearby dots in scale and opacity.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./style.css": "./src/DotGridLoader.css"
+  },
+  "scripts": {
+    "demo": "python3 -m http.server 5175 --directory demo",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "typescript": "^5.3.0"
+  },
+  "keywords": [
+    "react",
+    "loading",
+    "loader",
+    "animation",
+    "dot-grid",
+    "skeleton",
+    "background"
+  ],
+  "license": "MIT"
+}

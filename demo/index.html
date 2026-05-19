@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dot Grid Loader — demo</title>
+  <link rel="stylesheet" href="./DotGridLoader.css" />
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font: 14px/1.5 -apple-system, system-ui, sans-serif;
+      background: #ffffff;
+      color: #1a1f29;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+    header {
+      padding: 24px 32px;
+      border-bottom: 1px solid #eef1f5;
+    }
+    h1 { margin: 0 0 4px; font-size: 16px; font-weight: 600; }
+    p  { margin: 0; color: #6b727a; font-size: 13px; }
+    main {
+      position: relative;
+      overflow: hidden;
+      background: #ffffff;
+      color: #2D6BFF;
+      min-height: 0;
+    }
+    .overlay {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 1;
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(6px);
+      padding: 14px 22px;
+      border-radius: 8px;
+      font-size: 13px;
+      color: #1a1f29;
+      border: 1px solid #eef1f5;
+      box-shadow: 0 4px 24px rgba(45, 107, 255, 0.08);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Dot Grid Loader</h1>
+    <p>Full container width with radial edge fade — drop behind any loading UI.</p>
+  </header>
+  <main>
+    <div
+      data-loader
+      data-full-width
+      data-edge-fade
+      data-cell-size="20"
+      data-dot-size="3"
+    ></div>
+  </main>
+
+  <script>
+    // Mirrors DotGridLoader.jsx — generates the same DOM structure
+    // and animates an invisible radial bump orbiting the grid.
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const instances = [];
+
+    function makeInstance(el, cols, rows, bumpScale, orbitDuration, bumpRadiusRatio, orbitRadiusRatio) {
+      // Rebuild dots to match the new cols/rows.
+      el.replaceChildren();
+      const total = cols * rows;
+      const dots = [];
+      for (let i = 0; i < total; i++) {
+        const dot = document.createElement('span');
+        dot.className = 'dot-grid-loader__dot';
+        el.appendChild(dot);
+        dots.push(dot);
+      }
+      el.style.setProperty('--cols', cols);
+      el.style.setProperty('--rows', rows);
+      const minDim = Math.min(cols, rows);
+      return {
+        dots,
+        rows,
+        cols,
+        ccol: (cols - 1) / 2,
+        crow: (rows - 1) / 2,
+        orbitR: minDim * orbitRadiusRatio,
+        bumpR: minDim * bumpRadiusRatio,
+        bumpScale,
+        orbitDuration,
+      };
+    }
+
+    function renderLoader(host) {
+      const dotSize = +host.dataset.dotSize || 4;
+      const gap = +host.dataset.gap || 18;
+      const cellSize = +host.dataset.cellSize || (dotSize + gap);
+      const orbitDuration = +host.dataset.duration || 4000;
+      const bumpScale = +host.dataset.bumpScale || 0.6;
+      const bumpRadiusRatio = +host.dataset.bumpRadius || 0.28;
+      const orbitRadiusRatio = +host.dataset.orbitRadius || 0.35;
+      const fullWidth = host.hasAttribute('data-full-width');
+      const edgeFade = host.hasAttribute('data-edge-fade');
+      const explicitRows = +host.dataset.rows || 0;
+      const explicitCols = +host.dataset.cols || 0;
+
+      const el = document.createElement('div');
+      el.className = 'dot-grid-loader'
+        + (fullWidth ? ' is-full-width' : '')
+        + (edgeFade ? ' is-edge-fade' : '');
+      el.setAttribute('role', 'status');
+      el.setAttribute('aria-label', 'Loading');
+      el.style.setProperty('--dot-size', dotSize + 'px');
+      el.style.setProperty('--gap', gap + 'px');
+      el.style.setProperty('--cell-size', cellSize + 'px');
+      host.replaceWith(el);
+
+      const instance = makeInstance(
+        el,
+        explicitCols || 1,
+        explicitRows || 1,
+        bumpScale,
+        orbitDuration,
+        bumpRadiusRatio,
+        orbitRadiusRatio,
+      );
+      if (!reduceMotion) instances.push(instance);
+
+      if (fullWidth && !(explicitRows && explicitCols)) {
+        const recompute = () => {
+          const w = el.clientWidth;
+          const h = el.clientHeight;
+          const cols = Math.max(1, Math.floor(w / cellSize));
+          const rows = Math.max(1, Math.floor(h / cellSize));
+          if (cols === instance.cols && rows === instance.rows) return;
+          const updated = makeInstance(
+            el, cols, rows, bumpScale, orbitDuration, bumpRadiusRatio, orbitRadiusRatio,
+          );
+          Object.assign(instance, updated);
+        };
+        recompute();
+        new ResizeObserver(recompute).observe(el);
+      }
+    }
+
+    document.querySelectorAll('[data-loader]').forEach(renderLoader);
+
+    if (!reduceMotion && instances.length) {
+      const start = performance.now();
+      function tick(now) {
+        for (const inst of instances) {
+          const angle = ((now - start) / inst.orbitDuration) * Math.PI * 2;
+          const cx = inst.ccol + inst.orbitR * Math.cos(angle);
+          const cy = inst.crow + inst.orbitR * Math.sin(angle);
+          for (let i = 0; i < inst.dots.length; i++) {
+            const r = (i / inst.cols) | 0;
+            const c = i - r * inst.cols;
+            const dx = c - cx;
+            const dy = r - cy;
+            const d = Math.sqrt(dx * dx + dy * dy);
+            const f = Math.max(0, 1 - d / inst.bumpR);
+            const eased = f * f * (3 - 2 * f);
+            inst.dots[i].style.setProperty('--s', 1 + inst.bumpScale * eased);
+            inst.dots[i].style.setProperty('--o', 0.2 + 0.8 * eased);
+          }
+        }
+        requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+    }
+  </script>
+</body>
+</html>
