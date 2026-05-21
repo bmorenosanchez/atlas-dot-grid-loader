@@ -27,7 +27,7 @@
       position: relative;
       overflow: hidden;
       background: #ffffff;
-      color: #2D6BFF;
+      color: #E6E6E6;
       min-height: 0;
     }
     .overlay {
@@ -68,7 +68,7 @@
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const instances = [];
 
-    function makeInstance(el, cols, rows, bumpScale, orbitDuration, bumpRadiusRatio, orbitRadiusRatio) {
+    function makeInstance(el, cols, rows, opts) {
       // Rebuild dots to match the new cols/rows.
       el.replaceChildren();
       const total = cols * rows;
@@ -82,16 +82,22 @@
       el.style.setProperty('--cols', cols);
       el.style.setProperty('--rows', rows);
       const minDim = Math.min(cols, rows);
+      const angle = Math.random() * Math.PI * 2;
       return {
         dots,
         rows,
         cols,
-        ccol: (cols - 1) / 2,
-        crow: (rows - 1) / 2,
-        orbitR: minDim * orbitRadiusRatio,
-        bumpR: minDim * bumpRadiusRatio,
-        bumpScale,
-        orbitDuration,
+        baseBumpR: minDim * opts.bumpRadiusRatio,
+        bumpScale: opts.bumpScale,
+        bumpSpeed: opts.bumpSpeed,
+        pulseAmount: opts.pulseAmount,
+        pulseSpeed: opts.pulseSpeed,
+        chaos: opts.chaos,
+        // Bump position (in cell units) + velocity.
+        x: (cols - 1) / 2,
+        y: (rows - 1) / 2,
+        vx: opts.bumpSpeed * Math.cos(angle),
+        vy: opts.bumpSpeed * Math.sin(angle),
       };
     }
 
@@ -99,10 +105,12 @@
       const dotSize = +host.dataset.dotSize || 4;
       const gap = +host.dataset.gap || 18;
       const cellSize = +host.dataset.cellSize || (dotSize + gap);
-      const orbitDuration = +host.dataset.duration || 4000;
       const bumpScale = +host.dataset.bumpScale || 0.6;
       const bumpRadiusRatio = +host.dataset.bumpRadius || 0.28;
-      const orbitRadiusRatio = +host.dataset.orbitRadius || 0.35;
+      const bumpSpeed = +host.dataset.bumpSpeed || 6;
+      const pulseAmount = +host.dataset.pulseAmount || 0.5;
+      const pulseSpeed = +host.dataset.pulseSpeed || 0.4;
+      const chaos = +host.dataset.chaos || 0.5;
       const fullWidth = host.hasAttribute('data-full-width');
       const edgeFade = host.hasAttribute('data-edge-fade');
       const explicitRows = +host.dataset.rows || 0;
@@ -119,15 +127,8 @@
       el.style.setProperty('--cell-size', cellSize + 'px');
       host.replaceWith(el);
 
-      const instance = makeInstance(
-        el,
-        explicitCols || 1,
-        explicitRows || 1,
-        bumpScale,
-        orbitDuration,
-        bumpRadiusRatio,
-        orbitRadiusRatio,
-      );
+      const opts = { bumpScale, bumpRadiusRatio, bumpSpeed, pulseAmount, pulseSpeed, chaos };
+      const instance = makeInstance(el, explicitCols || 1, explicitRows || 1, opts);
       if (!reduceMotion) instances.push(instance);
 
       if (fullWidth && !(explicitRows && explicitCols)) {
@@ -137,10 +138,7 @@
           const cols = Math.max(1, Math.floor(w / cellSize));
           const rows = Math.max(1, Math.floor(h / cellSize));
           if (cols === instance.cols && rows === instance.rows) return;
-          const updated = makeInstance(
-            el, cols, rows, bumpScale, orbitDuration, bumpRadiusRatio, orbitRadiusRatio,
-          );
-          Object.assign(instance, updated);
+          Object.assign(instance, makeInstance(el, cols, rows, opts));
         };
         recompute();
         new ResizeObserver(recompute).observe(el);
@@ -150,19 +148,41 @@
     document.querySelectorAll('[data-loader]').forEach(renderLoader);
 
     if (!reduceMotion && instances.length) {
-      const start = performance.now();
+      let lastTime = performance.now();
+      function perturb(inst) {
+        const speed = Math.sqrt(inst.vx * inst.vx + inst.vy * inst.vy);
+        const delta = (Math.random() - 0.5) * (Math.PI / 4); // ±22.5°
+        const angle = Math.atan2(inst.vy, inst.vx) + delta;
+        inst.vx = speed * Math.cos(angle);
+        inst.vy = speed * Math.sin(angle);
+      }
       function tick(now) {
+        const dt = Math.min(0.05, (now - lastTime) / 1000);
+        lastTime = now;
         for (const inst of instances) {
-          const angle = ((now - start) / inst.orbitDuration) * Math.PI * 2;
-          const cx = inst.ccol + inst.orbitR * Math.cos(angle);
-          const cy = inst.crow + inst.orbitR * Math.sin(angle);
+          // Move the bump and bounce off grid edges.
+          inst.x += inst.vx * dt;
+          inst.y += inst.vy * dt;
+          const maxX = inst.cols - 1;
+          const maxY = inst.rows - 1;
+          if (inst.x < 0)      { inst.x = -inst.x;            inst.vx = -inst.vx; perturb(inst); }
+          if (inst.x > maxX)   { inst.x = 2 * maxX - inst.x;  inst.vx = -inst.vx; perturb(inst); }
+          if (inst.y < 0)      { inst.y = -inst.y;            inst.vy = -inst.vy; perturb(inst); }
+          if (inst.y > maxY)   { inst.y = 2 * maxY - inst.y;  inst.vy = -inst.vy; perturb(inst); }
+          // Sporadic between-bounce direction nudge.
+          if (inst.chaos > 0 && Math.random() < inst.chaos * 0.1) perturb(inst);
+
+          // Pulse the bump radius over time.
+          const pulse = 1 + inst.pulseAmount * Math.sin(now * 0.001 * inst.pulseSpeed * Math.PI * 2);
+          const currentBumpR = Math.max(0.5, inst.baseBumpR * pulse);
+
           for (let i = 0; i < inst.dots.length; i++) {
             const r = (i / inst.cols) | 0;
             const c = i - r * inst.cols;
-            const dx = c - cx;
-            const dy = r - cy;
+            const dx = c - inst.x;
+            const dy = r - inst.y;
             const d = Math.sqrt(dx * dx + dy * dy);
-            const f = Math.max(0, 1 - d / inst.bumpR);
+            const f = Math.max(0, 1 - d / currentBumpR);
             const eased = f * f * (3 - 2 * f);
             inst.dots[i].style.setProperty('--s', 1 + inst.bumpScale * eased);
             inst.dots[i].style.setProperty('--o', 0.2 + 0.8 * eased);

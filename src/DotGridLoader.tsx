@@ -8,10 +8,12 @@ export interface DotGridLoaderProps {
   gap?: number;
   cellSize?: number;
   color?: string;
-  orbitDuration?: number;
   bumpScale?: number;
   bumpRadiusRatio?: number;
-  orbitRadiusRatio?: number;
+  bumpSpeed?: number;
+  pulseAmount?: number;
+  pulseSpeed?: number;
+  chaos?: number;
   fullWidth?: boolean;
   edgeFade?: boolean;
   className?: string;
@@ -25,10 +27,12 @@ export function DotGridLoader({
   gap = 18,
   cellSize,
   color = "currentColor",
-  orbitDuration = 4000,
   bumpScale = 0.6,
   bumpRadiusRatio = 0.28,
-  orbitRadiusRatio = 0.35,
+  bumpSpeed = 6,
+  pulseAmount = 0.5,
+  pulseSpeed = 0.4,
+  chaos = 0.5,
   fullWidth = false,
   edgeFade = false,
   className = "",
@@ -66,25 +70,49 @@ export function DotGridLoader({
     const dots = el.querySelectorAll<HTMLSpanElement>(".dot-grid-loader__dot");
     if (!dots.length) return;
 
-    const ccol = (cols - 1) / 2;
-    const crow = (rows - 1) / 2;
     const minDim = Math.min(cols, rows);
-    const orbitR = minDim * orbitRadiusRatio;
-    const bumpR = minDim * bumpRadiusRatio;
+    const baseBumpR = minDim * bumpRadiusRatio;
+    const maxX = cols - 1;
+    const maxY = rows - 1;
 
-    const start = performance.now();
+    let x = maxX / 2;
+    let y = maxY / 2;
+    const initialAngle = Math.random() * Math.PI * 2;
+    let vx = bumpSpeed * Math.cos(initialAngle);
+    let vy = bumpSpeed * Math.sin(initialAngle);
+
+    const perturb = () => {
+      const speed = Math.sqrt(vx * vx + vy * vy);
+      const delta = (Math.random() - 0.5) * (Math.PI / 4);
+      const angle = Math.atan2(vy, vx) + delta;
+      vx = speed * Math.cos(angle);
+      vy = speed * Math.sin(angle);
+    };
+
+    let lastTime = performance.now();
     let raf = 0;
     const tick = (now: number) => {
-      const angle = ((now - start) / orbitDuration) * Math.PI * 2;
-      const cx = ccol + orbitR * Math.cos(angle);
-      const cy = crow + orbitR * Math.sin(angle);
+      const dt = Math.min(0.05, (now - lastTime) / 1000);
+      lastTime = now;
+
+      x += vx * dt;
+      y += vy * dt;
+      if (x < 0)    { x = -x;            vx = -vx; perturb(); }
+      if (x > maxX) { x = 2 * maxX - x;  vx = -vx; perturb(); }
+      if (y < 0)    { y = -y;            vy = -vy; perturb(); }
+      if (y > maxY) { y = 2 * maxY - y;  vy = -vy; perturb(); }
+      if (chaos > 0 && Math.random() < chaos * 0.1) perturb();
+
+      const pulse = 1 + pulseAmount * Math.sin(now * 0.001 * pulseSpeed * Math.PI * 2);
+      const currentBumpR = Math.max(0.5, baseBumpR * pulse);
+
       for (let i = 0; i < dots.length; i++) {
         const r = (i / cols) | 0;
         const c = i - r * cols;
-        const dx = c - cx;
-        const dy = r - cy;
+        const dx = c - x;
+        const dy = r - y;
         const d = Math.sqrt(dx * dx + dy * dy);
-        const f = Math.max(0, 1 - d / bumpR);
+        const f = Math.max(0, 1 - d / currentBumpR);
         const eased = f * f * (3 - 2 * f);
         dots[i].style.setProperty("--s", String(1 + bumpScale * eased));
         dots[i].style.setProperty("--o", String(0.2 + 0.8 * eased));
@@ -93,7 +121,7 @@ export function DotGridLoader({
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [rows, cols, orbitDuration, bumpScale, bumpRadiusRatio, orbitRadiusRatio]);
+  }, [rows, cols, bumpScale, bumpRadiusRatio, bumpSpeed, pulseAmount, pulseSpeed, chaos]);
 
   const classes = [
     "dot-grid-loader",

@@ -39,11 +39,13 @@ import { DotGridLoader } from "@/components/loaders/DotGridLoader";
 | `edgeFade` | `false` | Applies a radial-gradient mask so the outer edges fade to transparent. **Required for all Atlas integrations below.** |
 | `cellSize` | `dotSize + gap` | Square cell size in px. Smaller → denser grid. |
 | `dotSize` | `4` | Dot diameter in px. |
-| `color` | `currentColor` | Use `#2D6BFF` for Atlas. |
-| `orbitDuration` | `4000` | Time (ms) for the bump to complete one orbit. |
+| `color` | `currentColor` | Use `#E6E6E6` for Atlas (subtle gray that sits behind content). |
 | `bumpScale` | `0.6` | Peak extra scale of dots inside the bump. |
-| `bumpRadiusRatio` | `0.28` | Bump radius as a fraction of the grid's smaller side. |
-| `orbitRadiusRatio` | `0.35` | Orbit radius as a fraction of the grid's smaller side. |
+| `bumpRadiusRatio` | `0.28` | Base bump radius as a fraction of the grid's smaller side. |
+| `bumpSpeed` | `6` | Bump speed in cells per second. It bounces off the grid edges instead of orbiting. |
+| `pulseAmount` | `0.5` | How much the bump radius grows/shrinks over time (±50% at default). |
+| `pulseSpeed` | `0.4` | Pulse frequency in Hz. |
+| `chaos` | `0.5` | How sporadic the motion is (`0` = clean reflections, higher = more random angle changes). |
 
 The component is `position: relative`-agnostic — it sizes to its container. The container must have a non-zero width and height for `fullWidth` to compute rows/cols.
 

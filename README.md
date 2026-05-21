@@ -45,10 +45,12 @@ The parent must be `position: relative` (or any non-static positioning) and have
 | `rows` | `number` | `12` | Used only when `fullWidth` is off. |
 | `cols` | `number` | `20` | Used only when `fullWidth` is off. |
 | `color` | `string` | `"currentColor"` | Dot color. Inherits from parent's `color` by default. |
-| `orbitDuration` | `number` | `4000` | Time (ms) for the invisible bump to complete one orbit. |
 | `bumpScale` | `number` | `0.6` | Peak extra scale of dots inside the bump (1 + bumpScale). |
-| `bumpRadiusRatio` | `number` | `0.28` | Bump radius as a fraction of the grid's smaller side. |
-| `orbitRadiusRatio` | `number` | `0.35` | Orbit radius as a fraction of the grid's smaller side. |
+| `bumpRadiusRatio` | `number` | `0.28` | Base bump radius as a fraction of the grid's smaller side. |
+| `bumpSpeed` | `number` | `6` | Bump movement speed in cells per second. The bump travels in a straight line and reflects off the grid edges. |
+| `pulseAmount` | `number` | `0.5` | How much the bump radius grows/shrinks over time, as a fraction of the base radius (±50% at default). |
+| `pulseSpeed` | `number` | `0.4` | Radius pulse frequency in Hz (one full grow-shrink cycle per `1 / pulseSpeed` seconds). |
+| `chaos` | `number` | `0.5` | How sporadic the motion is. On every bounce the velocity angle is randomly perturbed by ±22.5°; in addition, `chaos` controls the probability of an extra mid-flight perturbation per frame. Set to `0` for clean billiard-ball reflections. |
 | `className` | `string` | `""` | Extra class for the root element. |
 | `style` | `CSSProperties` | — | Merged into the root element's inline style (after CSS variables). |
 
@@ -76,14 +78,15 @@ The parent must be `position: relative` (or any non-static positioning) and have
 
 - The grid is a CSS `display: grid` with square cells (`cellSize × cellSize`).
 - A `ResizeObserver` recomputes `rows` and `cols` from the container's dimensions whenever `fullWidth` is on.
-- A single `requestAnimationFrame` loop moves an invisible "bump" center in a circular orbit. For each dot, it computes the distance to the bump center and writes two CSS custom properties: `--s` (scale, smoothstepped from 1 to `1 + bumpScale`) and `--o` (opacity, from 0.2 to 1.0).
+- A single `requestAnimationFrame` loop simulates an invisible bump traveling through the grid: it integrates `position += velocity * dt`, reflects the velocity at each edge (and randomly nudges the angle on each bounce for sporadic motion), and modulates the bump's radius with a sine wave (`bumpRadiusRatio × (1 + pulseAmount × sin(2π × pulseSpeed × t))`).
+- For each dot, it computes the distance to the bump center, applies a smoothstep falloff against the current pulsing radius, and writes two CSS custom properties: `--s` (scale, from `1` to `1 + bumpScale`) and `--o` (opacity, from `0.2` to `1.0`).
 - The CSS rule for each dot reads those variables: `transform: scale(var(--s, 1)); opacity: var(--o, 0.2);` — so the GPU handles the actual paint.
 - With `edgeFade`, a `mask-image: radial-gradient(...)` softens the outer edges into transparent.
 
 ## Accessibility
 
 - Renders `role="status"` and `aria-label="Loading"` so screen readers announce it as a loading indicator.
-- Respects `prefers-reduced-motion: reduce` — the orbit is disabled and the grid becomes a static, 50% opacity backdrop.
+- Respects `prefers-reduced-motion: reduce` — the animation is disabled and the grid becomes a static, 50% opacity backdrop.
 
 ## Demo
 
